@@ -46,6 +46,8 @@ async function initSchema() {
       correct BOOLEAN NOT NULL,
       answered_at TIMESTAMPTZ DEFAULT now()
     );
+
+    ALTER TABLE words ADD COLUMN IF NOT EXISTS retired BOOLEAN DEFAULT FALSE;
   `);
 }
 
@@ -109,12 +111,15 @@ async function seedIfEmpty() {
 }
 
 async function getWordsBySession(session) {
-  const { rows } = await pool.query("SELECT * FROM words WHERE session = $1 ORDER BY id ASC", [session]);
+  const { rows } = await pool.query(
+    "SELECT * FROM words WHERE session = $1 AND retired = FALSE ORDER BY id ASC",
+    [session]
+  );
   return rows.map(rowToWord);
 }
 
 async function getAllWords() {
-  const { rows } = await pool.query("SELECT * FROM words ORDER BY id ASC");
+  const { rows } = await pool.query("SELECT * FROM words WHERE retired = FALSE ORDER BY id ASC");
   return rows.map(rowToWord);
 }
 
@@ -126,10 +131,68 @@ async function getCategories() {
 async function searchWords(q) {
   const like = `%${q}%`;
   const { rows } = await pool.query(
-    "SELECT * FROM words WHERE term ILIKE $1 OR full_text ILIKE $1 LIMIT 5",
+    "SELECT * FROM words WHERE (term ILIKE $1 OR full_text ILIKE $1) AND retired = FALSE LIMIT 5",
     [like]
   );
   return rows.map(rowToWord);
+}
+
+// Retires (soft-deletes) words by exact term match within a session, so old attempts/history
+// referencing them stay intact (no FK violation) but they stop showing up in quizzes.
+async function retireWordsByTerm(terms, session) {
+  if (!terms || !terms.length) return 0;
+  const { rowCount } = await pool.query(
+    "UPDATE words SET retired = TRUE WHERE session = $1 AND term = ANY($2::text[]) AND retired = FALSE",
+    [session, terms]
+  );
+  return rowCount;
+}
+
+// Adds one fresh, real word (already authored from a real web search + source) to a session.
+// Skips insertion if a non-retired word with the same term already exists in that session,
+// so re-running the same ingestion payload (e.g. on every cold-start restart) is harmless.
+async function addWord(w, session, isMemo = false) {
+  const { rows: existing } = await pool.query(
+    "SELECT id FROM words WHERE session = $1 AND term = $2 AND retired = FALSE",
+    [session, w.term]
+  );
+  if (existing.length) return { id: existing[0].id, skipped: true };
+  const id = await insertWord(w, session, isMemo);
+  return { id, skipped: false };
+}
+
+// Ingests fresh, web-search-sourced words delivered via the WORD_REFRESH_JSON env var, so new
+// content can be pushed to the live database without a code deploy: an operator (or a scheduled
+// Claude session with Render access) sets the env var, Render restarts the service, and this runs
+// on boot. Format: JSON array of { session, retireTerms?: string[], words: [...] } batches.
+// Idempotent — safe to leave the same value set across many restarts.
+async function ingestFreshWords() {
+  const raw = process.env.WORD_REFRESH_JSON;
+  if (!raw) return { ran: false };
+  let batches;
+  try {
+    batches = JSON.parse(raw);
+  } catch (e) {
+    console.error("WORD_REFRESH_JSON is not valid JSON, skipping ingest:", e.message);
+    return { ran: false, error: "invalid JSON" };
+  }
+  if (!Array.isArray(batches)) batches = [batches];
+
+  let retired = 0;
+  let inserted = 0;
+  let skipped = 0;
+  for (const batch of batches) {
+    if (!batch || !batch.session) continue;
+    if (batch.retireTerms && batch.retireTerms.length) {
+      retired += await retireWordsByTerm(batch.retireTerms, batch.session);
+    }
+    for (const w of batch.words || []) {
+      const result = await addWord(w, batch.session, !!batch.isMemo);
+      if (result.skipped) skipped++;
+      else inserted++;
+    }
+  }
+  return { ran: true, retired, inserted, skipped };
 }
 
 async function createMemo(text) {
@@ -188,4 +251,7 @@ module.exports = {
   markMemoFailed,
   recordAttempt,
   getStats,
+  addWord,
+  retireWordsByTerm,
+  ingestFreshWords,
 };

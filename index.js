@@ -140,6 +140,13 @@ async function main() {
       : `Database already has ${seedResult.count} words — skipping seed.`
   );
 
+  const ingest = await db.ingestFreshWords();
+  if (ingest.ran) {
+    console.log(
+      `WORD_REFRESH_JSON ingest: retired ${ingest.retired}, inserted ${ingest.inserted}, skipped (already present) ${ingest.skipped}.`
+    );
+  }
+
   server.listen(PORT, () => {
     console.log(`word-challenge API listening on port ${PORT}`);
     console.log(
