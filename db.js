@@ -148,6 +148,25 @@ async function retireWordsByTerm(terms, session) {
   return rowCount;
 }
 
+// Retires the oldest `count` non-retired words in a session (optionally scoped to memo vs.
+// non-memo words), picked by the database itself (ORDER BY id ASC) rather than by a fresh
+// scheduled session having to WebFetch the current list and pass back exact term strings — that
+// round-trip turned out to be unreliable (WebFetch can serve a stale/cached snapshot of the API
+// response, which silently turned a "replace the daily set" run into an "just add more" run and
+// caused duplicate content). This is the robust replacement: the caller only says how many to
+// retire, the server figures out which ones from its own source-of-truth data.
+async function retireOldest(session, count, isMemo = false) {
+  if (!count || count <= 0) return 0;
+  const { rowCount } = await pool.query(
+    `UPDATE words SET retired = TRUE WHERE id IN (
+       SELECT id FROM words WHERE session = $1 AND retired = FALSE AND is_memo = $2
+       ORDER BY id ASC LIMIT $3
+     )`,
+    [session, isMemo, count]
+  );
+  return rowCount;
+}
+
 // Adds one fresh, real word (already authored from a real web search + source) to a session.
 // Skips insertion if a non-retired word with the same term already exists in that session,
 // so re-running the same ingestion payload (e.g. on every cold-start restart) is harmless.
@@ -200,6 +219,9 @@ async function ingestFreshWords() {
     if (!batch || !batch.session) continue;
     if (batch.retireTerms && batch.retireTerms.length) {
       retired += await retireWordsByTerm(batch.retireTerms, batch.session);
+    }
+    if (batch.retireOldestCount) {
+      retired += await retireOldest(batch.session, batch.retireOldestCount, !!batch.isMemo);
     }
     for (const w of batch.words || []) {
       const result = await addWord(w, batch.session, !!batch.isMemo || !!w.memoId);
@@ -272,5 +294,7 @@ module.exports = {
   getStats,
   addWord,
   retireWordsByTerm,
+  retireOldest,
+  linkMemoToWord,
   ingestFreshWords,
 };
