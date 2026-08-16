@@ -22178,15 +22178,35 @@
   function normalize(s) {
     return s.toLowerCase().replace(/\s/g, "");
   }
+  function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  function randomizeChoices(word) {
+    const order = shuffleArray(word.choices.map((_, i) => i));
+    return {
+      ...word,
+      choices: order.map((i) => word.choices[i]),
+      whyWrong: order.map((i) => word.whyWrong[i]),
+      answer: order.indexOf(word.answer)
+    };
+  }
+  function randomizeWords(list) {
+    return shuffleArray(list.map(randomizeChoices));
+  }
   var API_BASE = "/api";
   function WordChallenge() {
     const [screen, setScreen] = (0, import_react3.useState)("intro");
-    const [amWords, setAmWords] = (0, import_react3.useState)(AM_SET);
-    const [pmWords, setPmWords] = (0, import_react3.useState)(PM_SET);
-    const [allWords, setAllWords] = (0, import_react3.useState)(ALL_WORDS);
+    const [amWords, setAmWords] = (0, import_react3.useState)(() => randomizeWords(AM_SET));
+    const [pmWords, setPmWords] = (0, import_react3.useState)(() => randomizeWords(PM_SET));
+    const [allWords, setAllWords] = (0, import_react3.useState)(() => randomizeWords(ALL_WORDS));
     const [categories, setCategories] = (0, import_react3.useState)(CATEGORIES);
     const [connected, setConnected] = (0, import_react3.useState)(false);
-    const [sessionWords, setSessionWords] = (0, import_react3.useState)(ALL_WORDS);
+    const [sessionWords, setSessionWords] = (0, import_react3.useState)(() => randomizeWords(ALL_WORDS));
     const [idx, setIdx] = (0, import_react3.useState)(0);
     const [picked, setPicked] = (0, import_react3.useState)(null);
     const [correctCount, setCorrectCount] = (0, import_react3.useState)(0);
@@ -22202,9 +22222,11 @@
         fetch(`${API_BASE}/words/pm`).then((r) => r.ok ? r.json() : Promise.reject())
       ]).then(([am, pm]) => {
         if (cancelled) return;
-        setAmWords(am);
-        setPmWords(pm);
-        const all = [...am, ...pm];
+        const amR = randomizeWords(am);
+        const pmR = randomizeWords(pm);
+        setAmWords(amR);
+        setPmWords(pmR);
+        const all = shuffleArray([...amR, ...pmR]);
         setAllWords(all);
         setCategories([...new Set(all.map((w) => w.category))]);
         setConnected(true);
