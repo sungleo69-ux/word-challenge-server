@@ -21880,6 +21880,9 @@
   function LuMoon(props) {
     return GenIcon({ "tag": "svg", "attr": { "viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor", "strokeWidth": "2", "strokeLinecap": "round", "strokeLinejoin": "round" }, "child": [{ "tag": "path", "attr": { "d": "M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" }, "child": [] }] })(props);
   }
+  function LuMic(props) {
+    return GenIcon({ "tag": "svg", "attr": { "viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor", "strokeWidth": "2", "strokeLinecap": "round", "strokeLinejoin": "round" }, "child": [{ "tag": "path", "attr": { "d": "M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" }, "child": [] }, { "tag": "path", "attr": { "d": "M19 10v2a7 7 0 0 1-14 0v-2" }, "child": [] }, { "tag": "line", "attr": { "x1": "12", "x2": "12", "y1": "19", "y2": "22" }, "child": [] }] })(props);
+  }
   function LuLink2(props) {
     return GenIcon({ "tag": "svg", "attr": { "viewBox": "0 0 24 24", "fill": "none", "stroke": "currentColor", "strokeWidth": "2", "strokeLinecap": "round", "strokeLinejoin": "round" }, "child": [{ "tag": "path", "attr": { "d": "M9 17H7A5 5 0 0 1 7 7h2" }, "child": [] }, { "tag": "path", "attr": { "d": "M15 7h2a5 5 0 1 1 0 10h-2" }, "child": [] }, { "tag": "line", "attr": { "x1": "8", "x2": "16", "y1": "12", "y2": "12" }, "child": [] }] })(props);
   }
@@ -21920,6 +21923,7 @@
   var Sparkles = makeIcon(LuSparkles);
   var Sunrise = makeIcon(LuSunrise);
   var Moon = makeIcon(LuMoon);
+  var Mic = makeIcon(LuMic);
 
   // src/wordchallenge.jsx
   var import_jsx_runtime2 = __toESM(require_jsx_runtime());
@@ -22742,7 +22746,8 @@
           memoInput,
           setMemoInput,
           memoNotes,
-          onSubmit: submitMemo
+          onSubmit: submitMemo,
+          onAddMemoNote
         }
       ),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
@@ -22773,7 +22778,47 @@
       )
     ] });
   }
-  function MemoCapture({ memoOpen, setMemoOpen, memoInput, setMemoInput, memoNotes, onSubmit }) {
+  var VOICE_MEMO_ENABLED = false;
+  function useVoiceMemo(onAddMemoNote) {
+    const [state, setState] = (0, import_react3.useState)("idle");
+    const [message, setMessage] = (0, import_react3.useState)("");
+    const supported = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    function start() {
+      if (!supported || state === "listening") return;
+      const Rec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const rec = new Rec();
+      rec.lang = "ko-KR";
+      rec.interimResults = false;
+      rec.continuous = false;
+      rec.maxAlternatives = 1;
+      rec.onstart = () => {
+        setState("listening");
+        setMessage("");
+      };
+      rec.onresult = (e) => {
+        var _a, _b, _c, _d;
+        const heard = (_d = (_c = (_b = (_a = e.results) == null ? void 0 : _a[0]) == null ? void 0 : _b[0]) == null ? void 0 : _c.transcript) == null ? void 0 : _d.trim();
+        if (heard) {
+          onAddMemoNote(heard);
+          setMessage(`\uC800\uC7A5\uB428: "${heard}"`);
+        }
+      };
+      rec.onerror = (e) => {
+        if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+          setMessage("\uB9C8\uC774\uD06C \uAD8C\uD55C\uC744 \uD5C8\uC6A9\uD574\uC8FC\uC154\uC57C \uC368\uC694.");
+        } else if (e.error === "no-speech") {
+          setMessage("\uC18C\uB9AC\uAC00 \uC548 \uB4E4\uB838\uC5B4\uC694. \uB2E4\uC2DC \uB20C\uB7EC\uC8FC\uC138\uC694.");
+        } else {
+          setMessage("\uC74C\uC131 \uC778\uC2DD\uC5D0 \uC2E4\uD328\uD588\uC5B4\uC694. \uB2E4\uC2DC \uB20C\uB7EC\uC8FC\uC138\uC694.");
+        }
+      };
+      rec.onend = () => setState("idle");
+      rec.start();
+    }
+    return { supported, state, message, start };
+  }
+  function MemoCapture({ memoOpen, setMemoOpen, memoInput, setMemoInput, memoNotes, onSubmit, onAddMemoNote }) {
+    const voice = useVoiceMemo(onAddMemoNote);
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
       "div",
       {
@@ -22784,45 +22829,88 @@
           padding: memoOpen ? "14px" : "12px 14px"
         },
         children: [
-          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-            "button",
-            {
-              onClick: () => setMemoOpen((v) => !v),
-              style: {
-                width: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                background: "transparent",
-                border: "none",
-                padding: 0,
-                cursor: "pointer"
-              },
-              children: [
-                /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", fontWeight: 600, color: COLORS.white70 }, children: [
-                  /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(PenLine, { size: 14, strokeWidth: 2.5, color: COLORS.white40 }),
-                  "\uD68C\uC758\uC5D0\uC11C \uB193\uCE5C \uB2E8\uC5B4, \uC9C0\uAE08 \uBA54\uBAA8\uD558\uAE30"
-                ] }),
-                memoNotes.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-                  "span",
-                  {
-                    style: {
-                      fontSize: "11px",
-                      fontWeight: 700,
-                      color: COLORS.teal,
-                      backgroundColor: COLORS.tealFaint,
-                      borderRadius: "999px",
-                      padding: "2px 8px"
-                    },
-                    children: [
-                      memoNotes.length,
-                      "\uAC1C"
-                    ]
-                  }
-                )
-              ]
-            }
-          ),
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { display: "flex", alignItems: "center", gap: "8px" }, children: [
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+              "button",
+              {
+                onClick: () => setMemoOpen((v) => !v),
+                style: {
+                  flex: 1,
+                  minWidth: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  background: "transparent",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer"
+                },
+                children: [
+                  /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+                    "span",
+                    {
+                      style: {
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontSize: "13px",
+                        fontWeight: 600,
+                        color: COLORS.white70,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap"
+                      },
+                      children: [
+                        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(PenLine, { size: 14, strokeWidth: 2.5, color: COLORS.white40 }),
+                        "\uD68C\uC758\uC5D0\uC11C \uB193\uCE5C \uB2E8\uC5B4, \uC9C0\uAE08 \uBA54\uBAA8\uD558\uAE30"
+                      ]
+                    }
+                  ),
+                  memoNotes.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+                    "span",
+                    {
+                      style: {
+                        flexShrink: 0,
+                        fontSize: "11px",
+                        fontWeight: 700,
+                        color: COLORS.teal,
+                        backgroundColor: COLORS.tealFaint,
+                        borderRadius: "999px",
+                        padding: "2px 8px",
+                        marginLeft: "8px"
+                      },
+                      children: [
+                        memoNotes.length,
+                        "\uAC1C"
+                      ]
+                    }
+                  )
+                ]
+              }
+            ),
+            VOICE_MEMO_ENABLED && voice.supported && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+              "button",
+              {
+                onClick: voice.start,
+                title: "\uB20C\uB7EC\uC11C \uB9D0\uD558\uBA74 \uC790\uB3D9\uC73C\uB85C \uBA54\uBAA8\uB3FC\uC694 (\uD0C0\uC774\uD551 \uC5C6\uC774)",
+                style: {
+                  flexShrink: 0,
+                  width: "26px",
+                  height: "26px",
+                  borderRadius: "999px",
+                  border: "none",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: voice.state === "listening" ? COLORS.amber : COLORS.faintHover,
+                  color: voice.state === "listening" ? COLORS.dark : COLORS.white40
+                },
+                children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Mic, { size: 13, strokeWidth: 2.5 })
+              }
+            )
+          ] }),
+          voice.message && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: { fontSize: "11px", color: COLORS.teal, marginTop: "8px", marginBottom: 0 }, children: voice.message }),
           memoOpen && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { marginTop: "12px" }, children: [
             /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { display: "flex", gap: "8px", marginBottom: memoNotes.length > 0 ? "10px" : 0 }, children: [
               /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
