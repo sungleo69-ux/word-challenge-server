@@ -22206,6 +22206,8 @@
     const [allWords, setAllWords] = (0, import_react3.useState)(() => randomizeWords(ALL_WORDS));
     const [categories, setCategories] = (0, import_react3.useState)(CATEGORIES);
     const [connected, setConnected] = (0, import_react3.useState)(false);
+    const [dataMode, setDataMode] = (0, import_react3.useState)("mock");
+    const [liveLoading, setLiveLoading] = (0, import_react3.useState)(false);
     const [sessionWords, setSessionWords] = (0, import_react3.useState)(() => randomizeWords(ALL_WORDS));
     const [idx, setIdx] = (0, import_react3.useState)(0);
     const [picked, setPicked] = (0, import_react3.useState)(null);
@@ -22217,10 +22219,7 @@
     (0, import_react3.useEffect)(() => {
       if (typeof window !== "undefined" && window.location.protocol === "file:") return;
       let cancelled = false;
-      Promise.all([
-        fetch(`${API_BASE}/words/am`).then((r) => r.ok ? r.json() : Promise.reject()),
-        fetch(`${API_BASE}/words/pm`).then((r) => r.ok ? r.json() : Promise.reject())
-      ]).then(([am, pm]) => {
+      function applyWords(am, pm, mode) {
         if (cancelled) return;
         const amR = randomizeWords(am);
         const pmR = randomizeWords(pm);
@@ -22230,7 +22229,21 @@
         setAllWords(all);
         setCategories([...new Set(all.map((w) => w.category))]);
         setConnected(true);
-      }).catch(() => {
+        setDataMode(mode);
+      }
+      function loadStored() {
+        return Promise.all([
+          fetch(`${API_BASE}/words/am`).then((r) => r.ok ? r.json() : Promise.reject()),
+          fetch(`${API_BASE}/words/pm`).then((r) => r.ok ? r.json() : Promise.reject())
+        ]).then(([am, pm]) => applyWords(am, pm, "stored"));
+      }
+      setLiveLoading(true);
+      Promise.all([
+        fetch(`${API_BASE}/words/am/live`).then((r) => r.ok ? r.json() : Promise.reject()),
+        fetch(`${API_BASE}/words/pm/live`).then((r) => r.ok ? r.json() : Promise.reject())
+      ]).then(([am, pm]) => applyWords(am, pm, "live")).catch(() => loadStored().catch(() => {
+      })).finally(() => {
+        if (!cancelled) setLiveLoading(false);
       });
       return () => {
         cancelled = true;
@@ -22365,7 +22378,9 @@
                     onStartPM: () => startQuiz(pmWords),
                     memoNotes,
                     onAddMemoNote: addMemoNote,
-                    connected
+                    connected,
+                    dataMode,
+                    liveLoading
                   }
                 ),
                 screen === "quiz" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(QuizCard, { word, index: idx, total: sessionWords.length, onPick: pick }),
@@ -22394,7 +22409,7 @@
                 marginTop: "16px",
                 lineHeight: 1.6
               },
-              children: "\uD504\uB85C\uD1A0\uD0C0\uC785 \uB370\uBAA8 \xB7 \uAE30\uBCF8 \uB2E8\uC5B4 6\uAC1C\uC758 \uD1B5\uACC4\xB7\uCD9C\uCC98\uB294 \uC608\uC2DC, \uC624\uB298\uC758 \uC774\uC288\xB7\uBA54\uBAA8 \uB2E8\uC5B4\uB294 \uC2E4\uC81C \uAC80\uC0C9 \uACB0\uACFC\uC608\uC694"
+              children: "\uBAA8\uB4E0 \uB2E8\uC5B4\uB294 \uC2E4\uC81C \uC6F9 \uAC80\uC0C9\uC73C\uB85C \uCC3E\uC740 \uC790\uB8CC\uB97C \uBC14\uD0D5\uC73C\uB85C \uB9CC\uB4E4\uC5B4\uC694 \xB7 \uCD9C\uCC98\uB294 \uCE74\uB4DC \uD558\uB2E8\uC5D0\uC11C \uD655\uC778\uD560 \uC218 \uC788\uC5B4\uC694"
             }
           )
         ] })
@@ -22413,7 +22428,9 @@
     onStartPM,
     memoNotes,
     onAddMemoNote,
-    connected
+    connected,
+    dataMode = "mock",
+    liveLoading = false
   }) {
     const [query, setQuery] = (0, import_react3.useState)("");
     const [memoInput, setMemoInput] = (0, import_react3.useState)("");
@@ -22746,11 +22763,11 @@
                   width: "6px",
                   height: "6px",
                   borderRadius: "999px",
-                  backgroundColor: connected ? COLORS.teal : COLORS.white25
+                  backgroundColor: liveLoading ? COLORS.amber : dataMode === "live" ? COLORS.teal : connected ? COLORS.white35 : COLORS.white25
                 }
               }
             ),
-            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: { fontSize: "10px", color: COLORS.white35 }, children: connected ? "\uBC31\uC5D4\uB4DC \uC5F0\uACB0\uB428 \xB7 \uC2E4\uC2DC\uAC04 \uB370\uC774\uD130" : "\uBC31\uC5D4\uB4DC \uBBF8\uC5F0\uACB0 \xB7 \uBAA9\uC5C5 \uB370\uC774\uD130\uB85C \uBCF4\uB294 \uC911" })
+            /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("span", { style: { fontSize: "10px", color: COLORS.white35 }, children: liveLoading ? "\uC9C0\uAE08 \uC6F9\uAC80\uC0C9\uC73C\uB85C \uC0C8 \uBB38\uC81C \uB9CC\uB4DC\uB294 \uC911\u2026 (\uCD5C\uB300 30\uCD08)" : dataMode === "live" ? "\uC2E4\uC2DC\uAC04 \uC0DD\uC131\uB428 \xB7 \uBC29\uAE08 \uC0C8\uB85C \uB9CC\uB4E0 \uBB38\uC81C\uC608\uC694" : dataMode === "stored" ? "\uBC31\uC5D4\uB4DC \uC5F0\uACB0\uB428 \xB7 \uC800\uC7A5\uB41C \uBB38\uC81C\uC608\uC694" : "\uBC31\uC5D4\uB4DC \uBBF8\uC5F0\uACB0 \xB7 \uBAA9\uC5C5 \uB370\uC774\uD130\uB85C \uBCF4\uB294 \uC911" })
           ]
         }
       )

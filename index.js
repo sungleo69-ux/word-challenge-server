@@ -4,7 +4,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const db = require("./db");
-const { generateWordFromMemo } = require("./generate");
+const { generateWordFromMemo, generateFreshSession } = require("./generate");
 
 const PORT = process.env.PORT || 4000;
 
@@ -68,6 +68,32 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === "/api/words/all" && req.method === "GET") {
       return send(res, 200, await db.getAllWords());
+    }
+
+    // "새로고침 = 진짜 새 문제" 모드: 저장된 걸 돌려주는 게 아니라, 그 자리에서 실제 웹검색 +
+    // 생성을 새로 돌려서 신선한 문제를 만들어요. ANTHROPIC_API_KEY가 없으면 501을 주고,
+    // 프론트엔드는 이 경우 평소처럼 저장된 단어 목록으로 조용히 돌아가요.
+    const liveMatch = pathname.match(/^\/api\/words\/(am|pm)\/live$/);
+    if (liveMatch && req.method === "GET") {
+      const session = liveMatch[1];
+      const count = Math.min(Math.max(Number(searchParams.get("count")) || (session === "am" ? 6 : 3), 1), 8);
+      try {
+        const fresh = await generateFreshSession(session, count);
+        const saved = [];
+        for (const w of fresh) {
+          const result = await db.addWord(w, session);
+          saved.push({ ...w, id: result.id, session, isMemo: false });
+        }
+        return send(res, 200, saved);
+      } catch (e) {
+        if (e.code === "NO_API_KEY") {
+          return send(res, 501, {
+            error: "live generation unavailable — set ANTHROPIC_API_KEY on the server to enable it",
+          });
+        }
+        console.error("live generation failed:", e);
+        return send(res, 500, { error: e.message });
+      }
     }
 
     if (pathname === "/api/words/search" && req.method === "GET") {
