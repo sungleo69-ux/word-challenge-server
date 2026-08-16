@@ -48,7 +48,24 @@ async function initSchema() {
     );
 
     ALTER TABLE words ADD COLUMN IF NOT EXISTS retired BOOLEAN DEFAULT FALSE;
+
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
   `);
+}
+
+async function getSetting(key) {
+  const { rows } = await pool.query("SELECT value FROM settings WHERE key = $1", [key]);
+  return rows.length ? rows[0].value : null;
+}
+
+async function setSetting(key, value) {
+  await pool.query(
+    "INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+    [key, value]
+  );
 }
 
 function rowToWord(row) {
@@ -195,13 +212,23 @@ async function linkMemoToWord(memoId, wordId) {
 // Ingests fresh, web-search-sourced words delivered via the WORD_REFRESH_JSON env var, so new
 // content can be pushed to the live database without a code deploy: an operator (or a scheduled
 // Claude session with Render access) sets the env var, Render restarts the service, and this runs
-// on boot. Format: JSON array of { session, retireTerms?: string[], words: [...] } batches.
-// A word may include a `memoId` field — if present, that memo is marked 'converted' and linked
-// to the new word (instead of staying 'pending' forever), same as the paid-API generate path.
-// Idempotent — safe to leave the same value set across many restarts.
+// on boot. Format: JSON array of { session, retireTerms?: string[], retireOldestCount?: number,
+// words: [...] } batches. A word may include a `memoId` field — if present, that memo is marked
+// 'converted' and linked to the new word (instead of staying 'pending' forever), same as the
+// paid-API generate path.
+//
+// Guarded by a `settings` row storing the exact raw value last applied: the free-tier service can
+// restart on its own (spins down when idle, restarts on the next request) at any time, which would
+// re-run this on boot with whatever WORD_REFRESH_JSON is still set — harmless for retireTerms
+// (matching an already-retired term is a no-op) but NOT harmless for retireOldestCount, which would
+// retire another batch of the *current* oldest words every single restart and eventually wipe the
+// session out. Comparing against the last-applied raw string makes every batch type a true
+// one-time action, safe to leave the env var set indefinitely.
 async function ingestFreshWords() {
   const raw = process.env.WORD_REFRESH_JSON;
   if (!raw) return { ran: false };
+  const lastApplied = await getSetting("word_refresh_applied");
+  if (lastApplied === raw) return { ran: false, unchanged: true };
   let batches;
   try {
     batches = JSON.parse(raw);
@@ -233,6 +260,7 @@ async function ingestFreshWords() {
       }
     }
   }
+  await setSetting("word_refresh_applied", raw);
   return { ran: true, retired, inserted, skipped, memosLinked };
 }
 
@@ -297,4 +325,6 @@ module.exports = {
   retireOldest,
   linkMemoToWord,
   ingestFreshWords,
+  getSetting,
+  setSetting,
 };
