@@ -169,7 +169,7 @@ async function main() {
   const ingest = await db.ingestFreshWords();
   if (ingest.ran) {
     console.log(
-      `WORD_REFRESH_JSON ingest: retired ${ingest.retired}, inserted ${ingest.inserted}, skipped (already present) ${ingest.skipped}.`
+      `WORD_REFRESH_JSON ingest: retired ${ingest.retired}, inserted ${ingest.inserted}, skipped (already present) ${ingest.skipped}, memos linked ${ingest.memosLinked || 0}.`
     );
   }
 

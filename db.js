@@ -161,10 +161,24 @@ async function addWord(w, session, isMemo = false) {
   return { id, skipped: false };
 }
 
+// Marks a memo as converted and links it to the word that was generated from it — mirrors what
+// attachGeneratedWord() does for the paid-API path, but usable from the free WORD_REFRESH_JSON
+// ingest path too. Only touches memos that are still 'pending', so re-running the same ingestion
+// payload on a later restart won't re-link (or double-count) an already-converted memo.
+async function linkMemoToWord(memoId, wordId) {
+  const { rowCount } = await pool.query(
+    "UPDATE memos SET status = 'converted', word_id = $1 WHERE id = $2 AND status = 'pending'",
+    [wordId, memoId]
+  );
+  return rowCount > 0;
+}
+
 // Ingests fresh, web-search-sourced words delivered via the WORD_REFRESH_JSON env var, so new
 // content can be pushed to the live database without a code deploy: an operator (or a scheduled
 // Claude session with Render access) sets the env var, Render restarts the service, and this runs
 // on boot. Format: JSON array of { session, retireTerms?: string[], words: [...] } batches.
+// A word may include a `memoId` field — if present, that memo is marked 'converted' and linked
+// to the new word (instead of staying 'pending' forever), same as the paid-API generate path.
 // Idempotent — safe to leave the same value set across many restarts.
 async function ingestFreshWords() {
   const raw = process.env.WORD_REFRESH_JSON;
@@ -181,18 +195,23 @@ async function ingestFreshWords() {
   let retired = 0;
   let inserted = 0;
   let skipped = 0;
+  let memosLinked = 0;
   for (const batch of batches) {
     if (!batch || !batch.session) continue;
     if (batch.retireTerms && batch.retireTerms.length) {
       retired += await retireWordsByTerm(batch.retireTerms, batch.session);
     }
     for (const w of batch.words || []) {
-      const result = await addWord(w, batch.session, !!batch.isMemo);
+      const result = await addWord(w, batch.session, !!batch.isMemo || !!w.memoId);
       if (result.skipped) skipped++;
       else inserted++;
+      if (w.memoId && !result.skipped) {
+        const linked = await linkMemoToWord(w.memoId, result.id);
+        if (linked) memosLinked++;
+      }
     }
   }
-  return { ran: true, retired, inserted, skipped };
+  return { ran: true, retired, inserted, skipped, memosLinked };
 }
 
 async function createMemo(text) {
