@@ -22383,9 +22383,9 @@
                     liveLoading
                   }
                 ),
-                screen === "quiz" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(QuizCard, { word, index: idx, total: sessionWords.length, onPick: pick }),
-                screen === "wrongExplain" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(WrongExplainCard, { word, picked, onRetry: retry, onGiveUp: giveUp }),
-                screen === "reveal" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RevealCard, { word, picked, onNext: next, isLast }),
+                screen === "quiz" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(QuizCard, { word, index: idx, total: sessionWords.length, onPick: pick, onExit: backToIntro }),
+                screen === "wrongExplain" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(WrongExplainCard, { word, picked, onRetry: retry, onGiveUp: giveUp, onExit: backToIntro }),
+                screen === "reveal" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(RevealCard, { word, picked, onNext: next, isLast, onExit: backToIntro }),
                 screen === "done" && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
                   DoneCard,
                   {
@@ -22885,8 +22885,37 @@
       }
     );
   }
-  function QuizCard({ word, index, total, onPick }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "28px 24px" }, children: [
+  function ExitButton({ onExit }) {
+    if (!onExit) return null;
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+      "button",
+      {
+        onClick: onExit,
+        "aria-label": "\uCC98\uC74C \uD654\uBA74\uC73C\uB85C",
+        style: {
+          position: "absolute",
+          top: "20px",
+          right: "20px",
+          width: "28px",
+          height: "28px",
+          borderRadius: "999px",
+          border: "none",
+          backgroundColor: COLORS.faint,
+          color: COLORS.white35,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer"
+        },
+        onMouseEnter: (e) => e.currentTarget.style.backgroundColor = COLORS.faintHover,
+        onMouseLeave: (e) => e.currentTarget.style.backgroundColor = COLORS.faint,
+        children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(X, { size: 14, strokeWidth: 2.5 })
+      }
+    );
+  }
+  function QuizCard({ word, index, total, onPick, onExit }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "28px 24px", position: "relative" }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ExitButton, { onExit }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
         "div",
         {
@@ -22894,7 +22923,8 @@
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            marginBottom: "20px"
+            marginBottom: "20px",
+            paddingRight: "32px"
           },
           children: [
             /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("span", { style: { fontSize: "11px", fontWeight: 600, color: COLORS.white35 }, children: [
@@ -22955,8 +22985,9 @@
       )) })
     ] });
   }
-  function WrongExplainCard({ word, picked, onRetry, onGiveUp }) {
-    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "28px 24px" }, children: [
+  function WrongExplainCard({ word, picked, onRetry, onGiveUp, onExit }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "28px 24px", position: "relative" }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ExitButton, { onExit }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { marginBottom: "18px" }, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
         "span",
         {
@@ -23077,9 +23108,10 @@
     }
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style, children: content });
   }
-  function RevealCard({ word, picked, onNext, isLast }) {
+  function RevealCard({ word, picked, onNext, isLast, onExit }) {
     const isCorrect = picked === word.answer;
-    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "28px 24px" }, children: [
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "28px 24px", position: "relative" }, children: [
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ExitButton, { onExit }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { marginBottom: "20px" }, children: /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
         "span",
         {
