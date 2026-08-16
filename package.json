@@ -1,0 +1,16 @@
+{
+  "name": "word-challenge-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "오늘의 단어 챌린지 — live backend (Render web service + Postgres)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
