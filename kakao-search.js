@@ -80,24 +80,25 @@ function toResult(top, type) {
   return { description, source: { label: KAKAO_SOURCE_LABEL[type], url: top.url } };
 }
 
-// Strict pass: only accepts a result whose title is clearly definitional. Used for the "biased"
-// queries below (query already has "뜻"/"이란" appended) — if even THAT doesn't turn up a
-// definitional-titled post, the top-ranked result is probably still just an incidental mention, so
-// this deliberately returns nothing rather than guessing.
-async function tryKakaoStrict(query, types) {
+// Runs one search and picks (at most) one candidate from it. strict=true only accepts a
+// definitional-titled result (used for the "뜻"/"이란"-biased queries — if even those don't turn up
+// a definitional title, the top result is probably still just an incidental mention, so this
+// deliberately returns nothing rather than guessing). strict=false falls back to the top-ranked
+// result regardless of title — only used as the very last resort.
+async function searchOneCandidate(query, types, strict) {
   for (const type of types) {
     try {
       const items = await searchKakao(query, type);
       console.log(
-        `[lookup-debug] strict query="${query}" type=${type} titles=${JSON.stringify(
+        `[lookup-debug] query="${query}" type=${type} strict=${strict} titles=${JSON.stringify(
           (items || []).map((it) => stripHtml(it.title))
         )}`
       );
-      const top = items && findDefinitional(items);
-      if (top) {
-        const result = toResult(top, type);
-        if (result) return result;
-      }
+      if (!items || !items.length) continue;
+      const top = strict ? findDefinitional(items) : findDefinitional(items) || items[0];
+      if (!top) continue;
+      const result = toResult(top, type);
+      if (result) return result;
     } catch (e) {
       console.error(`Kakao ${type} search failed:`, e.message);
     }
@@ -105,48 +106,68 @@ async function tryKakaoStrict(query, types) {
   return null;
 }
 
-// Relaxed pass: falls back to the top-ranked result even without a clearly definitional title —
-// used only as the very last resort, for jargon so fresh no one's written a glossary post yet.
-async function tryKakaoRelaxed(query, types) {
-  for (const type of types) {
-    try {
-      const items = await searchKakao(query, type);
-      if (items && items.length) {
-        const top = findDefinitional(items) || items[0];
-        const result = toResult(top, type);
-        if (result) return result;
-      }
-    } catch (e) {
-      console.error(`Kakao ${type} search failed:`, e.message);
+// This app is specifically about business/tech jargon (마케팅, 조직문화, IT, AI 등) — a huge share of
+// common Korean words have a completely different everyday meaning vs. their tech/business meaning
+// (e.g. "하네스" is normally a physical harness — pet/climbing/wiring — but in AI/tech circles means
+// "the operating structure wrapped around a model"). A plain "<term> 뜻" search has no way to know
+// which sense this app's audience actually wants, and can land on the wrong one entirely. Biasing
+// the query toward the app's own domain fixes that: searching "<term> 뜻 IT" for "하네스" correctly
+// surfaces posts titled "하네스 엔지니어링이란? — 뜻부터 실전 예시까지 완벽 정리" instead of a
+// generic cable-harness Wikipedia stub or an unrelated blog post that just uses the word once.
+const DOMAIN_BIASES = ["IT", "비즈니스"];
+
+// No single automatic guess can be trusted 100% for an ambiguous word — the fix isn't to keep
+// tweaking the ranking, it's to stop pretending there's one right answer and show the user a short
+// list of real candidates (each with its own source) so THEY pick the one that matches what they
+// actually meant. This collects up to `limit` distinct candidates (deduped by source URL) by
+// running the same priority chain as before, but instead of stopping at the first hit, it keeps
+// going until it's gathered enough:
+//   1. Kakao blog/web for "<term> 뜻 IT" / "<term> 이란 IT", then same with "비즈니스" — biased toward
+//      BOTH a definitional post (title must confirm it's a "뜻/이란" post) AND this app's own subject
+//      matter, so ambiguous everyday words surface their tech/business sense first.
+//   2. Same "<term> 뜻" / "<term> 이란" without the domain bias, still requiring a definitional title.
+//   3. Wikipedia — settled, encyclopedia-style terms (checked after the biased passes, since it has
+//      no concept of "this app's domain" and can return a real but wrong-sense article).
+//   4. Kakao blog/web/cafe for the bare term, relaxed (title doesn't have to be definitional) — a
+//      genuine last resort for jargon so fresh nobody's written a glossary post about it yet.
+// Returns an array (possibly empty) — caller should offer "save as memo" when it's empty.
+async function lookupTermCandidates(term, limit = 3) {
+  const candidates = [];
+  const seenUrls = new Set();
+
+  function add(candidate) {
+    if (!candidate || !candidate.source?.url || candidates.length >= limit) return;
+    if (seenUrls.has(candidate.source.url)) return;
+    seenUrls.add(candidate.source.url);
+    candidates.push({ term, ...candidate });
+  }
+
+  for (const bias of DOMAIN_BIASES) {
+    if (candidates.length >= limit) break;
+    for (const suffix of [" 뜻", " 이란"]) {
+      if (candidates.length >= limit) break;
+      add(await searchOneCandidate(`${term}${suffix} ${bias}`, ["blog", "web"], true));
     }
   }
-  return null;
-}
 
-// Looks up a term the user searched that isn't in our own database. Order matters here, all in
-// service of accuracy over just "found something":
-//   1. Wikipedia — settled, encyclopedia-style terms, most reliably on-definition.
-//   2. Kakao blog/web search for "<term> 뜻" then "<term> 이란" — both are well-known Korean search
-//      tricks that bias results toward glossary-style posts written to explain a term, rather than
-//      any post that happens to use the word. Only accepted if a result's title actually confirms
-//      it's a definition post (strict pass).
-//   3. Kakao blog/web/cafe search for the bare term, as a genuine last resort — less precise, but
-//      still better than nothing for very fresh jargon nobody's written a "뜻" post about yet.
-// Returns null if nothing was found anywhere (caller should offer to save it as a memo instead).
-async function lookupTermExplanation(term) {
-  const wiki = await lookupFromWikipedia(term);
-  console.log(`[lookup-debug] term="${term}" wikipedia hit=${!!wiki}`);
-  if (wiki) return wiki;
-
-  for (const suffix of [" 뜻", " 이란"]) {
-    const hit = await tryKakaoStrict(`${term}${suffix}`, ["blog", "web"]);
-    if (hit) return { term, ...hit };
+  if (candidates.length < limit) {
+    for (const suffix of [" 뜻", " 이란"]) {
+      if (candidates.length >= limit) break;
+      add(await searchOneCandidate(`${term}${suffix}`, ["blog", "web"], true));
+    }
   }
 
-  const bare = await tryKakaoRelaxed(term, ["blog", "web", "cafe"]);
-  if (bare) return { term, ...bare };
+  if (candidates.length < limit) {
+    const wiki = await lookupFromWikipedia(term);
+    console.log(`[lookup-debug] term="${term}" wikipedia hit=${!!wiki}`);
+    if (wiki) add({ description: wiki.description, source: wiki.source });
+  }
 
-  return null;
+  if (candidates.length < limit) {
+    add(await searchOneCandidate(term, ["blog", "web", "cafe"], false));
+  }
+
+  return candidates;
 }
 
-module.exports = { lookupTermExplanation };
+module.exports = { lookupTermCandidates };

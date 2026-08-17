@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const db = require("./db");
 const { generateWordFromMemo, generateFreshSession } = require("./generate");
-const { lookupTermExplanation } = require("./kakao-search");
+const { lookupTermCandidates } = require("./kakao-search");
 
 const PORT = process.env.PORT || 4000;
 
@@ -102,16 +102,18 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, q.trim() ? await db.searchWords(q.trim()) : []);
     }
 
-    // 검색창에 쳤는데 우리 퀴즈 목록엔 없는 단어용: 유료 LLM 호출 없이(무료) 네이버 검색으로
-    // 실제 뜻 + 출처 링크를 찾아서 보여줌. 네이버 키가 없으면 위키백과로만 시도.
-    // 둘 다 못 찾으면 found:false — 프론트엔드는 이 경우 "메모해두기" 버튼을 보여줌.
+    // 검색창에 쳤는데 우리 퀴즈 목록엔 없는 단어용: 유료 LLM 호출 없이(무료) 카카오 검색 +
+    // 위키백과로 실제 뜻 + 출처 링크 후보를 최대 3개까지 찾아서 보여줌 — 한 개만 골라서 보여주면
+    // 애매한 단어(예: "하네스")에서 엉뚱한 뜻을 자동으로 확정해버릴 위험이 있어서, 사용자가 직접
+    // 맞는 걸 고를 수 있게 후보 목록으로 줌. 하나도 못 찾으면 found:false — 프론트엔드는 이 경우
+    // "메모해두기" 버튼을 보여줌.
     if (pathname === "/api/words/lookup" && req.method === "GET") {
       const term = (searchParams.get("term") || "").trim();
       if (!term) return send(res, 400, { error: "term is required" });
       try {
-        const result = await lookupTermExplanation(term);
-        if (!result) return send(res, 200, { found: false });
-        return send(res, 200, { found: true, ...result });
+        const candidates = await lookupTermCandidates(term, 3);
+        if (!candidates.length) return send(res, 200, { found: false });
+        return send(res, 200, { found: true, term, candidates });
       } catch (e) {
         console.error("term lookup failed:", e);
         return send(res, 200, { found: false, error: e.message });
