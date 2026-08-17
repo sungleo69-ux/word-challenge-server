@@ -64,30 +64,54 @@ async function lookupFromWikipedia(term) {
   }
 }
 
-// Looks up a term the user searched that isn't in our own database. Tries Kakao's blog index first
-// (best for fresh business/trend jargon — Korean bloggers explain new terms fast), then web
-// documents, then cafe posts, then finally Wikipedia as a last resort. Returns null if nothing was
-// found anywhere (caller should offer to save it as a memo instead).
-async function lookupTermExplanation(term) {
-  for (const type of ["blog", "web", "cafe"]) {
+// Among a batch of search results, prefer one whose TITLE plainly announces itself as a
+// definition/glossary post (contains "뜻", "의미", or "정의") over just taking whatever ranked #1 —
+// a plain keyword search can surface a post that only mentions the term in passing (e.g. searching
+// "하네스" alone once returned a post about "AI 하네스 엔지니어링" that used the word once, not an
+// actual explanation of what a harness is). Falls back to the top result if no title matches.
+function pickBestMatch(items) {
+  const definitional = items.find((it) => /뜻|의미|정의/.test(stripHtml(it.title)));
+  return definitional || items[0];
+}
+
+async function tryKakao(query, types) {
+  for (const type of types) {
     try {
-      const items = await searchKakao(term, type);
+      const items = await searchKakao(query, type);
       if (items && items.length) {
-        const top = items[0];
+        const top = pickBestMatch(items);
         const description = stripHtml(top.contents) || stripHtml(top.title);
         if (description) {
-          return {
-            term,
-            description,
-            source: { label: KAKAO_SOURCE_LABEL[type], url: top.url },
-          };
+          return { description, source: { label: KAKAO_SOURCE_LABEL[type], url: top.url } };
         }
       }
     } catch (e) {
       console.error(`Kakao ${type} search failed:`, e.message);
     }
   }
-  return await lookupFromWikipedia(term);
+  return null;
+}
+
+// Looks up a term the user searched that isn't in our own database. Order matters here, all in
+// service of accuracy over just "found something":
+//   1. Wikipedia — settled, encyclopedia-style terms, most reliably on-definition.
+//   2. Kakao blog/web search for "<term> 뜻" — appending "뜻" ("meaning") is a well-known trick for
+//      Korean search: it strongly biases results toward glossary-style posts written specifically
+//      to explain a term, instead of any post that happens to use the word.
+//   3. Kakao blog/web/cafe search for the bare term, as a last resort — less precise, but still
+//      better than nothing for very fresh jargon that hasn't been written up as a "뜻" post yet.
+// Returns null if nothing was found anywhere (caller should offer to save it as a memo instead).
+async function lookupTermExplanation(term) {
+  const wiki = await lookupFromWikipedia(term);
+  if (wiki) return wiki;
+
+  const biased = await tryKakao(`${term} 뜻`, ["blog", "web"]);
+  if (biased) return { term, ...biased };
+
+  const bare = await tryKakao(term, ["blog", "web", "cafe"]);
+  if (bare) return { term, ...bare };
+
+  return null;
 }
 
 module.exports = { lookupTermExplanation };
