@@ -22460,6 +22460,29 @@
       }
     );
   }
+  function SectionBadge({ icon: Icon, text }) {
+    return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
+      "div",
+      {
+        style: {
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          fontSize: "11px",
+          fontWeight: 600,
+          color: COLORS.amber,
+          backgroundColor: COLORS.amberFaint,
+          borderRadius: "999px",
+          padding: "4px 12px",
+          marginBottom: "10px"
+        },
+        children: [
+          /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Icon, { size: 12, strokeWidth: 2.5 }),
+          text
+        ]
+      }
+    );
+  }
   function SearchIntro({
     allWords,
     categories,
@@ -22492,27 +22515,6 @@
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "36px 24px 28px" }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { textAlign: "center", marginBottom: "20px" }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
-          "div",
-          {
-            style: {
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "11px",
-              fontWeight: 600,
-              color: COLORS.amber,
-              backgroundColor: COLORS.amberFaint,
-              borderRadius: "999px",
-              padding: "4px 12px",
-              marginBottom: "16px"
-            },
-            children: [
-              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Flame, { size: 12, strokeWidth: 2.5 }),
-              "\uCD9C\uD1F4\uADFC \uBC84\uC2A4 30\uBD84"
-            ]
-          }
-        ),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
           "h1",
           {
             style: {
@@ -22531,6 +22533,7 @@
         ),
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: { fontSize: "13px", color: COLORS.white40, lineHeight: 1.5 }, children: "\uAE30\uC5B5\uB098\uB294 \uB300\uB85C \uC801\uC5B4\uBCF4\uC138\uC694. \uBE44\uC2B7\uD55C \uB2E8\uC5B4\uB97C \uCC3E\uC544\uB4DC\uB824\uC694." })
       ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(SectionBadge, { icon: Search, text: "\uB2E8\uC5B4 \uAC80\uC0C9" }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { position: "relative", marginBottom: suggestions.length > 0 ? "8px" : "20px" }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
           Search,
@@ -22635,6 +22638,7 @@
           }
         )
       ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(SectionBadge, { icon: Flame, text: "\uCD9C\uD1F4\uADFC \uBC84\uC2A4 30\uBD84" }),
       /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { display: "flex", flexDirection: "column", gap: "10px", marginBottom: "22px" }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
           "button",
@@ -22697,6 +22701,7 @@
           }
         )
       ] }),
+      /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(SectionBadge, { icon: Sparkles, text: "\uAC80\uC0C9\uC5B4 \uB458\uB7EC\uBCF4\uAE30" }),
       trimmed.length === 0 && issueWords.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { marginBottom: "20px" }, children: [
         /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
           "div",
