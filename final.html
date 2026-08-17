@@ -22205,7 +22205,7 @@
   var API_BASE = "/api";
   function WordChallenge() {
     const [screen, setScreen] = (0, import_react3.useState)("intro");
-    const [lookup, setLookup] = (0, import_react3.useState)({ term: "", loading: false, candidates: [], notFound: false });
+    const [lookup, setLookup] = (0, import_react3.useState)({ term: "", loading: false, candidates: [], summary: null, notFound: false });
     const [amWords, setAmWords] = (0, import_react3.useState)(() => randomizeWords(AM_SET));
     const [pmWords, setPmWords] = (0, import_react3.useState)(() => randomizeWords(PM_SET));
     const [allWords, setAllWords] = (0, import_react3.useState)(() => randomizeWords(ALL_WORDS));
@@ -22283,18 +22283,24 @@
       const clean = term.trim();
       if (!clean) return;
       setScreen("lookup");
-      setLookup({ term: clean, loading: true, candidates: [], notFound: false });
+      setLookup({ term: clean, loading: true, candidates: [], summary: null, notFound: false });
       if (typeof window !== "undefined" && window.location.protocol === "file:") {
-        setLookup({ term: clean, loading: false, candidates: [], notFound: true });
+        setLookup({ term: clean, loading: false, candidates: [], summary: null, notFound: true });
         return;
       }
       fetch(`${API_BASE}/words/lookup?term=${encodeURIComponent(clean)}`).then((r) => r.ok ? r.json() : Promise.reject()).then((data) => {
         if (data.found && data.candidates && data.candidates.length) {
-          setLookup({ term: clean, loading: false, candidates: data.candidates, notFound: false });
+          setLookup({
+            term: clean,
+            loading: false,
+            candidates: data.candidates,
+            summary: data.summary || null,
+            notFound: false
+          });
         } else {
-          setLookup({ term: clean, loading: false, candidates: [], notFound: true });
+          setLookup({ term: clean, loading: false, candidates: [], summary: null, notFound: true });
         }
-      }).catch(() => setLookup({ term: clean, loading: false, candidates: [], notFound: true }));
+      }).catch(() => setLookup({ term: clean, loading: false, candidates: [], summary: null, notFound: true }));
     }
     function pick(choiceIdx) {
       if (picked !== null) return;
@@ -22412,6 +22418,7 @@
                     term: lookup.term,
                     loading: lookup.loading,
                     candidates: lookup.candidates,
+                    summary: lookup.summary,
                     notFound: lookup.notFound,
                     onExit: backToIntro,
                     onSaveMemo: () => {
@@ -23246,7 +23253,7 @@
     }
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style, children: content });
   }
-  function LookupExplainCard({ term, loading, candidates, notFound, onExit, onSaveMemo }) {
+  function LookupExplainCard({ term, loading, candidates, summary, notFound, onExit, onSaveMemo }) {
     const hasCandidates = candidates && candidates.length > 0;
     return /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)("div", { style: { padding: "28px 24px", position: "relative", minHeight: "280px" }, children: [
       /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(ExitButton, { onExit }),
@@ -23268,20 +23275,33 @@
               gap: "4px",
               fontSize: "11px",
               fontWeight: 700,
-              color: COLORS.teal,
-              backgroundColor: COLORS.tealFaint,
+              color: summary ? COLORS.amber : COLORS.teal,
+              backgroundColor: summary ? COLORS.amberFaint : COLORS.tealFaint,
               borderRadius: "999px",
               padding: "4px 10px"
             },
             children: [
-              /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Search, { size: 11, strokeWidth: 2.5 }),
-              "\uC6F9\uAC80\uC0C9 \uACB0\uACFC ",
-              candidates.length > 1 ? `${candidates.length}\uAC74` : ""
+              summary ? /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Sparkles, { size: 11, strokeWidth: 2.5 }) : /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(Search, { size: 11, strokeWidth: 2.5 }),
+              summary ? "AI \uC694\uC57D \xB7 \uAC80\uC99D \uC644\uB8CC" : `\uC6F9\uAC80\uC0C9 \uACB0\uACFC ${candidates.length > 1 ? `${candidates.length}\uAC74` : ""}`
             ]
           }
         ) }),
-        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("h2", { style: { fontSize: "22px", fontWeight: 800, color: COLORS.white, marginBottom: "6px" }, children: term }),
-        candidates.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: { fontSize: "12px", color: COLORS.white35, marginBottom: "16px" }, children: "\uB73B\uC774 \uC5EC\uB7EC \uAC1C\uC77C \uC218 \uC788\uC5B4\uC11C \uCC3E\uC740 \uAC78 \uB2E4 \uBCF4\uC5EC\uB4DC\uB824\uC694. \uB9DE\uB294 \uAC78 \uD655\uC778\uD574\uBCF4\uC138\uC694." }),
+        /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("h2", { style: { fontSize: "22px", fontWeight: 800, color: COLORS.white, marginBottom: summary ? "10px" : "6px" }, children: term }),
+        summary && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)(
+          "div",
+          {
+            style: {
+              backgroundColor: COLORS.amberFaint,
+              border: `1px solid rgba(255,184,77,0.3)`,
+              borderRadius: "16px",
+              padding: "16px",
+              marginBottom: "18px"
+            },
+            children: /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: { fontSize: "14px", color: COLORS.white85, lineHeight: 1.6, fontWeight: 600 }, children: summary.summary })
+          }
+        ),
+        !summary && candidates.length > 1 && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: { fontSize: "12px", color: COLORS.white35, marginBottom: "16px" }, children: "\uB73B\uC774 \uC5EC\uB7EC \uAC1C\uC77C \uC218 \uC788\uC5B4\uC11C \uCC3E\uC740 \uAC78 \uB2E4 \uBCF4\uC5EC\uB4DC\uB824\uC694. \uB9DE\uB294 \uAC78 \uD655\uC778\uD574\uBCF4\uC138\uC694." }),
+        summary && /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("p", { style: { fontSize: "11px", color: COLORS.white25, marginBottom: "8px" }, children: "\uC544\uB798 \uAC80\uC0C9 \uACB0\uACFC\uB97C \uADFC\uAC70\uB85C \uC694\uC57D\uD588\uC5B4\uC694 \xB7 \uC9C1\uC811 \uC6D0\uBB38\uB3C4 \uD655\uC778\uD574\uBCF4\uC138\uC694" }),
         /* @__PURE__ */ (0, import_jsx_runtime2.jsx)("div", { style: { display: "flex", flexDirection: "column", gap: "12px", marginBottom: "10px" }, children: candidates.map((c, i) => /* @__PURE__ */ (0, import_jsx_runtime2.jsxs)(
           "div",
           {

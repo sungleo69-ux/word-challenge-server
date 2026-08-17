@@ -6,6 +6,7 @@ const path = require("path");
 const db = require("./db");
 const { generateWordFromMemo, generateFreshSession } = require("./generate");
 const { lookupTermCandidates } = require("./kakao-search");
+const { synthesizeAndVerify } = require("./lookup-synthesis");
 
 const PORT = process.env.PORT || 4000;
 
@@ -102,18 +103,32 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, q.trim() ? await db.searchWords(q.trim()) : []);
     }
 
-    // 검색창에 쳤는데 우리 퀴즈 목록엔 없는 단어용: 유료 LLM 호출 없이(무료) 카카오 검색 +
-    // 위키백과로 실제 뜻 + 출처 링크 후보를 최대 3개까지 찾아서 보여줌 — 한 개만 골라서 보여주면
-    // 애매한 단어(예: "하네스")에서 엉뚱한 뜻을 자동으로 확정해버릴 위험이 있어서, 사용자가 직접
-    // 맞는 걸 고를 수 있게 후보 목록으로 줌. 하나도 못 찾으면 found:false — 프론트엔드는 이 경우
-    // "메모해두기" 버튼을 보여줌.
+    // 검색창에 쳤는데 우리 퀴즈 목록엔 없는 단어용: 무료 카카오 검색 + 위키백과로 실제 뜻 + 출처
+    // 링크 후보를 최대 3개까지 찾아옴. 후보가 여러 개인 이유는, 한 개만 골라서 보여주면 애매한
+    // 단어(예: "하네스")에서 엉뚱한 뜻을 자동으로 확정해버릴 위험이 있어서예요.
+    //
+    // ANTHROPIC_API_KEY가 설정돼 있으면(유료), 그 후보들을 근거로 짧은 뜻풀이 한 문장을 합성해서
+    // 같이 내려줌 — 작성 담당 1번 호출 + 검증 담당 1번 호출, 총 2번의 짧은 호출(이미 공짜로 가져온
+    // 텍스트를 요약하는 것뿐이라 generate.js의 /live 엔드포인트처럼 매번 새 웹검색을 하는 것보다
+    // 훨씬 저렴함). 키가 없거나 합성이 실패하면 summary 없이 후보 목록만 내려주고, 프론트엔드는
+    // 이 경우 알아서 목록만 보여줌(우아하게 저하 — 다른 곳과 동일한 패턴).
+    //
+    // 후보가 하나도 없으면 found:false — 프론트엔드는 이 경우 "메모해두기" 버튼을 보여줌.
     if (pathname === "/api/words/lookup" && req.method === "GET") {
       const term = (searchParams.get("term") || "").trim();
       if (!term) return send(res, 400, { error: "term is required" });
       try {
         const candidates = await lookupTermCandidates(term, 3);
         if (!candidates.length) return send(res, 200, { found: false });
-        return send(res, 200, { found: true, term, candidates });
+
+        let summary = null;
+        try {
+          summary = await synthesizeAndVerify(term, candidates);
+        } catch (e) {
+          if (e.code !== "NO_API_KEY") console.error("lookup synthesis failed (showing raw candidates only):", e.message);
+        }
+
+        return send(res, 200, { found: true, term, candidates, summary });
       } catch (e) {
         console.error("term lookup failed:", e);
         return send(res, 200, { found: false, error: e.message });
